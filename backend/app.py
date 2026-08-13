@@ -29,12 +29,14 @@ async def redact(file: UploadFile = File(...)):
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    output_path = redact_docx(input_path)
+    output_path, entity_counts = redact_docx(input_path)
 
+    print("\nDetected Entities:")
+    print(entity_counts)
     return FileResponse(
-        output_path,
-        filename=os.path.basename(output_path)
-    )
+    output_path,
+    filename=os.path.basename(output_path)
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],

@@ -6,7 +6,7 @@ from presidio_analyzer import (
 )
 from fake_generator import get_fake_value
 
-# Create analyzer only once
+# Create analyzer
 analyzer = AnalyzerEngine()
 
 # Aadhaar recognizer
@@ -51,15 +51,9 @@ def redact_text(text):
 
         original = text[result.start:result.end]
 
-        print(
-            f"{result.entity_type} -> {original}"
-        )
-
-        # Ignore labels like Email, Phone, etc.
         if original.strip() in IGNORE_WORDS:
             continue
 
-        # Ignore single-word PERSON detections
         if (
             result.entity_type == "PERSON"
             and len(original.split()) < 2
@@ -67,6 +61,15 @@ def redact_text(text):
             continue
 
         filtered_results.append(result)
+
+    entity_counts = {}
+
+    for result in filtered_results:
+        entity_type = result.entity_type
+
+        entity_counts[entity_type] = (
+            entity_counts.get(entity_type, 0) + 1
+        )
 
     filtered_results = sorted(
         filtered_results,
@@ -89,17 +92,27 @@ def redact_text(text):
             + text[result.end:]
         )
 
-    return text
+    return text, entity_counts
 
 
 def redact_docx(path):
 
     doc = Document(path)
 
+    final_counts = {}
+
     for paragraph in doc.paragraphs:
-        paragraph.text = redact_text(
+
+        redacted_text, counts = redact_text(
             paragraph.text
         )
+
+        paragraph.text = redacted_text
+
+        for key, value in counts.items():
+            final_counts[key] = (
+                final_counts.get(key, 0) + value
+            )
 
     output_path = (
         "outputs/redacted_"
@@ -108,4 +121,4 @@ def redact_docx(path):
 
     doc.save(output_path)
 
-    return output_path
+    return output_path, final_counts
