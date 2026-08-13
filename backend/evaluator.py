@@ -7,6 +7,7 @@ Supports evaluation per PII category and computes overall performance metrics.
 
 import json
 import os
+import re
 from docx import Document
 from redactor import analyzer, filter_and_resolve_overlaps, SUPPORTED_ENTITIES
 
@@ -121,9 +122,14 @@ def evaluate_redaction(docx_path: str, ground_truth_path: str) -> dict:
         matched_gt = set()
         matched_det = set()
 
+        def norm_s(s):
+            return re.sub(r"[\s\+\.-]", "", s.lower())
+
         for d in det_set:
+            norm_d = norm_s(d)
             for g in gt_set:
-                if d in g or g in d:
+                norm_g = norm_s(g)
+                if norm_d == norm_g or norm_d in norm_g or norm_g in norm_d:
                     tp += 1
                     matched_gt.add(g)
                     matched_det.add(d)

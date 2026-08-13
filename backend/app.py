@@ -1,7 +1,8 @@
 """
 app.py
 ------
-FastAPI server providing endpoints for PII redaction, detailed analysis, and evaluation.
+FastAPI web server providing REST endpoints for document PII redaction,
+synthetic replacement diff generation, and ground-truth benchmark evaluation.
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -12,13 +13,22 @@ import os
 from docx import Document
 
 from redactor import redact_docx, redact_text, filter_and_resolve_overlaps, analyzer, SUPPORTED_ENTITIES
-from fake_generator import get_fake_value, entity_map
+from fake_generator import get_fake_value
 from evaluator import evaluate_redaction, generate_evaluation_markdown
 
 app = FastAPI(
-    title="Aegis Redact PII Engine API",
-    version="1.0",
-    description="Enterprise API for PII Detection, Synthetic Replacement, and Document Redaction"
+    title="Aegis Redact Engine API",
+    version="1.0.0",
+    description="Enterprise API for PII Detection, Synthetic Replacement, and Document Sanitization"
+)
+
+# Enable CORS for local Next.js frontend development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 UPLOAD_DIR = "uploads"
@@ -29,11 +39,12 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 @app.get("/")
-def home():
+def get_service_status():
+    """Health check endpoint returning API operational status and supported PII categories."""
     return {
         "status": "online",
         "service": "Aegis Redact Engine",
-        "version": "1.0",
+        "version": "1.0.0",
         "supported_categories": [
             "Full Names (PERSON)",
             "Email Addresses (EMAIL_ADDRESS)",
@@ -49,11 +60,11 @@ def home():
 
 
 @app.post("/redact-full")
-async def redact_file_full(file: UploadFile = File(...)):
+async def process_document_redaction(file: UploadFile = File(...)):
     """
-    Processes uploaded file (.docx or .txt), detects all 9 PII types,
-    replaces PII with realistic fakes, saves redacted document,
-    and returns a structured JSON summary + diff preview + download URL.
+    Processes an uploaded .docx or .txt document, detects PII entities,
+    substitutes detected instances with realistic synthetic fakes,
+    saves the redacted document, and returns summary stats + verification diffs.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file was selected.")
@@ -62,7 +73,7 @@ async def redact_file_full(file: UploadFile = File(...)):
     if ext not in [".docx", ".txt"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format '{ext}'. Only .docx and .txt files are supported."
+            detail=f"Unsupported file extension '{ext}'. Supported formats: .docx, .txt"
         )
 
     input_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -88,7 +99,7 @@ async def redact_file_full(file: UploadFile = File(...)):
             if k in entity_counts:
                 entity_counts[k] += v
 
-        # Extract sample diffs from docx
+        # Generate verification sample diff snippets
         doc = Document(input_path)
         full_text = []
         for p in doc.paragraphs:
@@ -100,6 +111,7 @@ async def redact_file_full(file: UploadFile = File(...)):
                     for p in cell.paragraphs:
                         if p.text and p.text.strip():
                             full_text.append(p.text)
+
         combined_text = "\n".join(full_text[:30])
         results = analyzer.analyze(text=combined_text, language="en", entities=SUPPORTED_ENTITIES)
         filtered = filter_and_resolve_overlaps(results, combined_text)
@@ -124,14 +136,17 @@ async def redact_file_full(file: UploadFile = File(...)):
                 if len(sample_diffs) >= 15:
                     break
 
-    else: # .txt
+    else:  # .txt
         with open(input_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
+
         redacted_text, counts = redact_text(text)
         output_filename = "redacted_" + file.filename
         output_path = os.path.join(OUTPUT_DIR, output_filename)
+
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(redacted_text)
+
         for k, v in counts.items():
             if k in entity_counts:
                 entity_counts[k] += v
@@ -170,10 +185,10 @@ async def redact_file_full(file: UploadFile = File(...)):
 
 
 @app.post("/redact")
-async def redact_file(file: UploadFile = File(...)):
-    """Legacy endpoint returning direct file response."""
+async def redact_file_legacy(file: UploadFile = File(...)):
+    """Legacy file download endpoint returning stream response."""
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Filename missing")
+        raise HTTPException(status_code=400, detail="Filename missing.")
 
     input_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(input_path, "wb") as buffer:
@@ -203,35 +218,26 @@ async def redact_file(file: UploadFile = File(...)):
 
 
 @app.get("/download/{filename}")
-def download_redacted_file(filename: str):
-    """Download the generated redacted file from the outputs directory."""
+def download_file(filename: str):
+    """Downloads a processed redacted file from the outputs directory."""
     path = os.path.join(OUTPUT_DIR, filename)
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="File not found.")
     media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if filename.endswith(".docx") else "text/plain"
     return FileResponse(path, filename=filename, media_type=media_type)
 
 
 @app.get("/evaluate")
-def run_evaluation():
+def execute_benchmark():
     """Runs evaluation benchmark against sample_ground_truth.json."""
     docx_file = os.path.join(UPLOAD_DIR, "Red_Herring_Prospectus.docx")
     gt_file = "sample_ground_truth.json"
 
     if not os.path.exists(docx_file):
-        raise HTTPException(status_code=404, detail="Prospectus docx file not found in uploads.")
+        raise HTTPException(status_code=404, detail="Prospectus document not found in uploads directory.")
     if not os.path.exists(gt_file):
-        raise HTTPException(status_code=404, detail="Ground truth JSON file not found.")
+        raise HTTPException(status_code=404, detail="Ground-truth dataset not found.")
 
     res = evaluate_redaction(docx_file, gt_file)
     generate_evaluation_markdown(res, "evaluation_report.md")
     return JSONResponse(content=res)
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)

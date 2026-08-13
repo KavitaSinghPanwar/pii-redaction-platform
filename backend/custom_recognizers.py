@@ -58,7 +58,7 @@ PROSPECTUS_COMPANIES = [
     "Hingne Tare & Associates"
 ]
 
-# List of known prospectus names
+# List of known prospectus names for precision recognizer
 PROSPECTUS_NAMES = [
     "Kushal Subbayya Hegde",
     "KUSHAL SUBBAYYA HEGDE",
@@ -182,7 +182,7 @@ def get_custom_recognizers():
             comp_parts.append(r"\b" + esc + r"(?!\w)")
     comp_regex_exact = "|".join(comp_parts)
 
-    generic_comp_regex = r"\b[A-Z][A-Za-z0-9&\s.-]+(?:\bPrivate Limited\b|\bPvt\.?\s*Ltd\.?\b|\bLimited\b|\bLtd\.?\b|\bLLP\b|\bInc\.?\b|\bCorporation\b|\bCorp\.?\b|\bBank Limited\b|\bFamily Trust\b|\bBank\b)\b"
+    generic_comp_regex = r"\b[A-Z][A-Za-z0-9&\s.,-]+(?:\s+Private\s+Limited|\s+Pvt\.?\s*Ltd\.?|\s+Limited|\s+Ltd\.?|,\s*LLP|\s+LLP|\s+Inc\.?|\s+Corporation|\s+Corp\.?|\s+Bank\s+Limited|\s+Family\s+Trust|\s+Bank|\s+Associates|\s+Research)\b"
     company_patterns = [
         Pattern(name="exact_prospectus_companies", regex=comp_regex_exact, score=0.98),
         Pattern(name="generic_company_suffix", regex=generic_comp_regex, score=0.85)
@@ -195,7 +195,6 @@ def get_custom_recognizers():
     )
 
     # 6. Physical / Mailing Address Recognizers
-    # Addresses are matched as complete atomic entities including PIN code, state, and country.
     address_patterns = [
         Pattern(
             name="address_regex_full",
