@@ -224,8 +224,8 @@ def get_custom_recognizers():
     phone_patterns = [
         Pattern(
             name="phone_indian_format",
-            regex=r"\b(?:\+\s*91|91)?[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{4,6}\b",
-            score=0.80
+            regex=r"(?:\+\s*91|\+[\s.-]*91|\+|\b91|\b0\d{2,4})?[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{4,6}\b",
+            score=0.85
         )
     ]
     recognizers.append(

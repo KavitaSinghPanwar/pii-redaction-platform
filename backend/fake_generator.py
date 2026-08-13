@@ -52,12 +52,9 @@ def get_fake_value(entity_type: str, original: str) -> str:
             value = fake.email()
 
     elif entity_type == "PHONE_NUMBER":
-        # Realistic Indian or US phone number based on original format
-        if key.startswith("+91") or key.startswith("91"):
-            digits = str(fake.random_number(digits=10, fix_len=True))
-            value = f"+91 {digits[:5]} {digits[5:]}"
-        else:
-            value = fake.phone_number()
+        # Always generate a clean, uniform +91 phone number format
+        digits = str(fake.random_number(digits=10, fix_len=True))
+        value = f"+91 {digits[:5]} {digits[5:]}"
 
     elif entity_type in ("LOCATION", "ADDRESS"):
         raw_address = fake.address().replace("\n", ", ")
