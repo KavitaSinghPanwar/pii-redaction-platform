@@ -1,23 +1,80 @@
 from docx import Document
-from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer import (
+    AnalyzerEngine,
+    PatternRecognizer,
+    Pattern
+)
 from fake_generator import get_fake_value
 
+# Create analyzer only once
 analyzer = AnalyzerEngine()
+
+# Aadhaar recognizer
+aadhaar_pattern = Pattern(
+    name="aadhaar_pattern",
+    regex=r"\b\d{4}\s\d{4}\s\d{4}\b",
+    score=0.9
+)
+
+aadhaar_recognizer = PatternRecognizer(
+    supported_entity="AADHAAR",
+    patterns=[aadhaar_pattern]
+)
+
+analyzer.registry.add_recognizer(aadhaar_recognizer)
+
 
 def redact_text(text):
 
     results = analyzer.analyze(
         text=text,
-        language="en"
+        language="en",
+        entities=[
+            "PERSON",
+            "EMAIL_ADDRESS",
+            "PHONE_NUMBER",
+            "LOCATION",
+            "AADHAAR"
+        ]
     )
 
-    results = sorted(
-        results,
+    IGNORE_WORDS = {
+        "Name",
+        "Email",
+        "Phone",
+        "Aadhaar"
+    }
+
+    filtered_results = []
+
+    for result in results:
+
+        original = text[result.start:result.end]
+
+        print(
+            f"{result.entity_type} -> {original}"
+        )
+
+        # Ignore labels like Email, Phone, etc.
+        if original.strip() in IGNORE_WORDS:
+            continue
+
+        # Ignore single-word PERSON detections
+        if (
+            result.entity_type == "PERSON"
+            and len(original.split()) < 2
+        ):
+            continue
+
+        filtered_results.append(result)
+
+    filtered_results = sorted(
+        filtered_results,
         key=lambda x: x.start,
         reverse=True
     )
 
-    for result in results:
+    for result in filtered_results:
 
         original = text[result.start:result.end]
 
@@ -40,7 +97,9 @@ def redact_docx(path):
     doc = Document(path)
 
     for paragraph in doc.paragraphs:
-        paragraph.text = redact_text(paragraph.text)
+        paragraph.text = redact_text(
+            paragraph.text
+        )
 
     output_path = (
         "outputs/redacted_"
