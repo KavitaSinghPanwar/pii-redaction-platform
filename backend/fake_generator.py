@@ -56,9 +56,16 @@ def get_fake_value(entity_type: str, original: str) -> str:
         digits = str(fake.random_number(digits=10, fix_len=True))
         value = f"+91 {digits[:5]} {digits[5:]}"
 
-    elif entity_type in ("LOCATION", "ADDRESS"):
-        raw_address = fake.address().replace("\n", ", ")
-        value = f"{raw_address}"
+    elif entity_type == "LOCATION":
+        # For single/two-word location names without digits (e.g. Maharashtra, India, Mumbai),
+        # return a realistic city name rather than a full street address block.
+        if len(key.split()) <= 2 and not any(char.isdigit() for char in key):
+            value = fake.city()
+        else:
+            value = fake.address().replace("\n", ", ")
+
+    elif entity_type == "ADDRESS":
+        value = fake.address().replace("\n", ", ")
 
     elif entity_type in ("COMPANY", "ORGANIZATION"):
         value = fake.company() + " Ltd"

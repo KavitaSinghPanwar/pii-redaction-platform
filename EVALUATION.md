@@ -1,6 +1,6 @@
 # Quality Assurance & Evaluation Report: Privora PII Engine
 
-This standalone evaluation report documents the empirical performance, ground-truth benchmarking methodology, scope decisions, zero-leakage audit, historical bug resolutions, and spaCy model tradeoffs for the **Privora PII Redaction Engine**.
+This standalone evaluation report documents the empirical performance, ground-truth benchmarking methodology, scope decisions, zero-leakage audit, root-cause bug resolutions, and spaCy model tradeoffs for the **Privora PII Redaction Engine**.
 
 ---
 
@@ -14,7 +14,7 @@ The evaluation benchmark was constructed by manually annotating a representative
 
 ### Evaluation Match Definitions
 - **True Positive (TP)**: A ground-truth PII entity that was correctly identified by character offset overlap AND assigned the exact matching PII category type.
-- **False Positive (FP)**: A span flagged as PII that does not correspond to a ground-truth entity, or a non-PII term misclassified as PII (e.g. historical bug where table header labels `SIZE`, `ELIGIBILITY`, or `E-MAIL` were misdetected as company names).
+- **False Positive (FP)**: A span flagged as PII that does not correspond to a ground-truth entity, or a non-PII term misclassified as PII.
 - **False Negative (FN)**: A ground-truth PII entity present in the document that the tool failed to detect.
 
 ### Matching Granularity & Subjective Judgment Calls
@@ -36,9 +36,10 @@ The evaluation benchmark was constructed by manually annotating a representative
 ## 2. Explicit Scope Decisions
 
 ### Identifiers Classified as OUT OF SCOPE (Non-PII)
-- **Corporate Identity Numbers (CIN)** (e.g., `U28129PN1979PLC141032`): **Not Redacted**. CINs are public corporate registration numbers issued by the Ministry of Corporate Affairs (MCA).
-- **Director Identification Numbers (DIN)** (e.g., `DIN: 00135070`): **Not Redacted**. DINs are public regulatory filing numbers assigned to corporate officers under Indian company law.
-- **Professional Registration Numbers** (e.g., Engineer License `M-140388`): **Not Redacted**. Public professional accreditation codes do not disclose private personal identity.
+- **Regulatory Bodies & Statutory Laws**: Regulators (e.g., *Securities and Exchange Board of India* / SEBI, *Reserve Bank of India* / RBI) and statutory acts (*Issue of Capital and Disclosure Requirements Regulations*) are public legal references, **not corporate PII entities**.
+- **Corporate Identity Numbers (CIN)** (e.g., `U28129PN1979PLC141032`): Public corporate registration numbers issued by the MCA.
+- **Director Identification Numbers (DIN)** (e.g., `DIN: 00135070`): Public regulatory filing numbers assigned under Indian company law.
+- **Professional Registration Numbers** (e.g., Engineer License `M-140388`): Public accreditation codes.
 - **Document Section Identifiers**: Paragraph numbers, clause references, and table numbers are retained.
 
 ### Identifiers Classified as IN SCOPE (Redacted)
@@ -98,22 +99,32 @@ A verification audit was performed by scanning every ground-truth PII entity str
 
 ---
 
-## 6. Known Bugs Found & Fixed
+## 6. Known Bugs Found & Root-Cause Resolutions
 
-### Bug 1: Partial-Span Replacement & Mixed Real/Fake Address Splicing
-- **Symptom**: Replacing place names inside physical address lines left behind raw pincodes, taluka names, and state names next to fake street names (e.g., `"11/3 Village Jennifer Lopez Taluka - Khed Pune – 410 501"`).
-- **Resolution**: Enforced container priority in `filter_and_resolve_overlaps()`. Complete physical address blocks (`ADDRESS`) are assigned `type_priority = 10`, overriding and subsuming nested sub-tokens.
+### Bug 1: Regulatory Names & Broad Suffix Pattern Matching
+- **Root Cause**: `COMPANY_SUFFIX_REGEX` previously included overly generic financial nouns (`Securities`, `Capital`, `Board`, `Group`, `Fund`). SpaCy's `ORG` detector flagged statutory regulatory phrases containing `"Securities"` (*Securities and Exchange Board of India*) or `"Capital"` (*Issue of Capital*) as companies, replacing them with fake corporate names.
+- **Root-Cause Resolution**: Restricted `COMPANY_SUFFIX_REGEX` strictly to formal corporate legal entity suffixes (`Private Limited`, `Pvt Ltd`, `Limited`, `Ltd`, `LLP`, `Inc`, `Corporation`, `Corp`, `PLC`).
+- **Before vs. After Text**:
+  - *Original*: `"...pursuant to Regulation 6(1) of the Securities and Exchange Board of India (Issue of Capital and Disclosure Requirements) Regulations..."`
+  - *Before (Bug)*: `"...pursuant to Regulation 6(1) Cochran, Wilson and Smith Ltd (Robles, Clark and Parker Ltd and Disclosure Requirements)..."`
+  - *After (Fixed)*: `"...pursuant to Regulation 6(1) of the Securities and Exchange Board of India (Issue of Capital and Disclosure Requirements) Regulations..."` (**100% Preserved**)
+
+### Bug 2: Address Fake Fragment Cross-Contamination
+- **Root Cause**: When a state name (e.g. `"Maharashtra"`) was detected as an isolated `LOCATION` entity outside a full address block, `fake_generator.py` executed `fake.address()`, generating a 3-line street address (`"38714 Kirk Rue Suite 769..."`). Because `entity_map["Maharashtra"]` cached this value, the identical fake street address fragment was injected into unrelated address lines.
+- **Root-Cause Resolution**: Refined `fake_generator.py` to check entity type and text structure. Single/two-word location names without digits (e.g. `"Maharashtra"`, `"India"`) generate single-word city/state replacements (`fake.city()`), while full address blocks generate street addresses (`fake.address()`).
+- **Before vs. After Text**:
+  - *Registered Office*: `'Registered Office: 8985 Anderson Spring, Leeberg, PR 87966'`
+  - *Corporate Office*: `'Corporate Office: 392 Morales Causeway, East Stephaniemouth, IA 31836'` (**Zero Cross-Contamination**)
+
+### Bug 3: Partial-Span Replacement & Mixed Address Text
+- **Root Cause**: Replacing place names inside physical address lines left behind raw pincodes next to fake street names.
+- **Root-Cause Resolution**: Enforced container priority in `filter_and_resolve_overlaps()`. Complete physical address blocks (`ADDRESS`) are assigned `type_priority = 10`, overriding and subsuming nested sub-tokens.
 - **Status**: **Fully Fixed** (Confirmed 0% real PII leakage).
 
-### Bug 2: Duplicated "+" Symbols in Phone Number Replacements
-- **Symptom**: Phone numbers rendered with extra plus signs (e.g. `"+ ++91 90942 66202"` or `"++91 98765 43210"`).
-- **Resolution**: Updated `filter_and_resolve_overlaps()` to inspect preceding characters and expand detected phone spans to include leading `+` and country codes. Formatted synthetic phone replacements cleanly as `+91 XXXXX XXXXX`.
+### Bug 4: Duplicated "+" Symbols in Phone Numbers
+- **Root Cause**: Presidio phone recognizers matched digits without capturing leading `+` prefix.
+- **Root-Cause Resolution**: Updated `filter_and_resolve_overlaps()` to inspect preceding characters and expand detected phone spans to include leading `+` and country codes.
 - **Status**: **Fully Fixed** (Confirmed zero symbol duplication).
-
-### Bug 3: Company-Name False Positives on Table Headers & Text Deletion
-- **Symptom**: Table headers (`SIZE`, `ELIGIBILITY`, `E-MAIL`) and section headers (`DETAILS OF THE OFFER TO PUBLIC`) were misdetected as company names, causing real text to be deleted and replaced with fake company names.
-- **Resolution**: Implemented `is_valid_company_entity()` validation in `redactor.py`. Single-word candidates without explicit legal company suffixes (`Limited`, `Ltd`, `LLP`, `Inc`, `Pvt`, `Corp`, `Bank`, `Trust`, `Associates`, `Research`, `Services`, `Logistics`, `Infra`) or known company matches are rejected. Added `HEADER_NON_COMPANY_WORDS` filter list.
-- **Status**: **Fully Fixed** (Company Category Precision improved from **63.89% to 100.00%**; zero table headers modified).
 
 ---
 
@@ -128,10 +139,6 @@ To optimize for deployment on Render's **512 MB memory limit**, an empirical com
 | **`en_core_web_sm`** | **14.5 MB** | **250.6 MB** | **0.197 s** | **0.525 s** | **100.0% / 78.3% / 87.8%** | **100.0% / 62.9% / 77.2%** | **93.8% / 100.0% / 96.8%** | **98.3% / 83.1% / 90.0%** | **PASSED** (250 MB << 450 MB target) |
 | `en_core_web_md` | 53.9 MB | **496.7 MB** | 0.577 s | 0.936 s | 94.6% / 76.1% / 84.3% | **100.0% / 62.9% / 77.2%** | 88.2% / 100.0% / 93.8% | 95.7% / 82.3% / 88.5% | **FAILED** (Exceeds 450MB safety limit) |
 | `en_core_web_lg` | 424.5 MB | **671.5 MB** | 0.743 s | 1.114 s | 94.7% / 78.3% / 85.7% | **100.0% / 62.9% / 77.2%** | 93.8% / 100.0% / 96.8% | 96.6% / 83.1% / 89.3% | **CRITICAL FAILURE (OOM > 512 MB)** |
-
-### Final Deployment Selection & Rationale
-- **Chosen Model**: `en_core_web_sm` is set as default.
-- **Reasoning**: `en_core_web_sm` is the **only** model that keeps peak memory safely under the 450 MB target (**250.6 MB peak RAM**), leaving **261.4 MB of headroom** to prevent Render container OOM crashes. It achieves **100.0% Precision on Names and Companies**, while loading **3.4x faster** (0.197s) and executing in **0.525s total processing time**.
 
 ---
 

@@ -85,7 +85,7 @@ def cleanup_formatting(text: str) -> str:
 from custom_recognizers import register_all_custom_recognizers, PROSPECTUS_COMPANIES
 
 COMPANY_SUFFIX_REGEX = re.compile(
-    r"\b(?:Private\s+Limited|Pvt\.?\s*Ltd\.?|Limited|Ltd\.?|LLP|Inc\.?|Corporation|Corp\.?|Bank|Trust|Holdings|Associates|Research|Partners|Capital|Services|Logistics|Infra|Distriparks|Industries|Motors|Securities|Management|Solutions|Technologies|Ventures|Group|Fund)\b",
+    r"\b(?:Private\s+Limited|Pvt\.?\s*Ltd\.?|Limited|Ltd\.?|LLP|Inc\.?|Corporation|Corp\.?|Public\s+Limited\s+Company|PLC)\b",
     re.IGNORECASE
 )
 
