@@ -17,7 +17,7 @@ from fake_generator import get_fake_value
 from evaluator import evaluate_redaction, generate_evaluation_markdown
 
 app = FastAPI(
-    title="Aegis Redact Engine API",
+    title="Privora Engine API",
     version="1.0.0",
     description="Enterprise API for PII Detection, Synthetic Replacement, and Document Sanitization"
 )
@@ -43,7 +43,7 @@ def get_service_status():
     """Health check endpoint returning API operational status and supported PII categories."""
     return {
         "status": "online",
-        "service": "Aegis Redact Engine",
+        "service": "Privora Engine",
         "version": "1.0.0",
         "supported_categories": [
             "Full Names (PERSON)",

@@ -164,7 +164,7 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-slate-200/80 bg-white py-4 text-center text-xs text-slate-500">
-        <p>Aegis Redact Engine • Enterprise PII Anonymization Platform • Hybrid Presidio + spaCy NER Architecture</p>
+        <p>Privora Engine • Enterprise PII Anonymization Platform • Hybrid Presidio + spaCy NER Architecture</p>
       </footer>
     </div>
   );

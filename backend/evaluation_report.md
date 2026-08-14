@@ -20,24 +20,24 @@ The ground-truth dataset (`sample_ground_truth.json`) contains manually annotate
 
 | PII Category | Ground Truth Count | Detected Count | Precision | Recall | F1 Score | Accuracy |
 |---|---|---|---|---|---|---|
-| **PERSON** | 45 | 38 | 94.74% | 78.26% | 85.71% | 75.00% |
+| **PERSON** | 45 | 36 | 100.00% | 78.26% | 87.80% | 78.26% |
 | **EMAIL_ADDRESS** | 19 | 19 | 100.00% | 100.00% | 100.00% | 100.00% |
-| **PHONE_NUMBER** | 15 | 15 | 93.33% | 93.33% | 93.33% | 87.50% |
+| **PHONE_NUMBER** | 14 | 15 | 93.33% | 100.00% | 96.55% | 93.33% |
 | **COMPANY** | 35 | 22 | 100.00% | 62.86% | 77.19% | 62.86% |
 | **ADDRESS** | 15 | 16 | 93.75% | 100.00% | 96.77% | 93.75% |
 | **SSN** | 3 | 3 | 100.00% | 100.00% | 100.00% | 100.00% |
-| **CREDIT_CARD** | 2 | 1 | 100.00% | 50.00% | 66.67% | 50.00% |
+| **CREDIT_CARD** | 1 | 1 | 100.00% | 100.00% | 100.00% | 100.00% |
 | **DATE_OF_BIRTH** | 1 | 1 | 100.00% | 100.00% | 100.00% | 100.00% |
 | **IP_ADDRESS** | 2 | 2 | 100.00% | 100.00% | 100.00% | 100.00% |
 
 ### Overall Performance Summary
 - **Total True Positives (TP):** 113
-- **Total False Positives (FP):** 4
-- **Total False Negatives (FN):** 25
-- **Overall Precision:** 96.58%
-- **Overall Recall:** 81.88%
-- **Overall F1 Score:** 88.63%
-- **Overall Accuracy:** 79.58%
+- **Total False Positives (FP):** 2
+- **Total False Negatives (FN):** 23
+- **Overall Precision:** 98.26%
+- **Overall Recall:** 83.09%
+- **Overall F1 Score:** 90.04%
+- **Overall Accuracy:** 81.88%
 
 ## Residual Real-PII Leakage Check Methodology & Results
 

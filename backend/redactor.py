@@ -7,14 +7,30 @@ and replaces detected instances with consistent realistic fakes.
 """
 
 from docx import Document
+import os
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from custom_recognizers import register_all_custom_recognizers
 from fake_generator import get_fake_value
-import os
 
-# Initialize Analyzer Engine and register custom recognizers
-analyzer = AnalyzerEngine()
-register_all_custom_recognizers(analyzer)
+# Read SPACY_MODEL environment variable, defaulting to lightweight deployment model en_core_web_sm
+SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
+
+def create_analyzer_engine(model_name: str = None) -> AnalyzerEngine:
+    """Configures and returns a Presidio AnalyzerEngine using the target spaCy model."""
+    target_model = model_name or SPACY_MODEL
+    config = {
+        "nlp_engine_name": "spacy",
+        "models": [{"lang_code": "en", "model_name": target_model}]
+    }
+    provider = NlpEngineProvider(nlp_configuration=config)
+    nlp_engine = provider.create_engine()
+    engine = AnalyzerEngine(nlp_engine=nlp_engine)
+    register_all_custom_recognizers(engine)
+    return engine
+
+# Initialize default Analyzer Engine with configured model
+analyzer = create_analyzer_engine()
 
 # All supported entities for the assignment
 SUPPORTED_ENTITIES = [
@@ -66,6 +82,58 @@ def cleanup_formatting(text: str) -> str:
     return text.strip()
 
 
+from custom_recognizers import register_all_custom_recognizers, PROSPECTUS_COMPANIES
+
+COMPANY_SUFFIX_REGEX = re.compile(
+    r"\b(?:Private\s+Limited|Pvt\.?\s*Ltd\.?|Limited|Ltd\.?|LLP|Inc\.?|Corporation|Corp\.?|Bank|Trust|Holdings|Associates|Research|Partners|Capital|Services|Logistics|Infra|Distriparks|Industries|Motors|Securities|Management|Solutions|Technologies|Ventures|Group|Fund)\b",
+    re.IGNORECASE
+)
+
+HEADER_NON_COMPANY_WORDS = {
+    "SIZE", "ELIGIBILITY", "E-MAIL", "EMAIL", "TELEPHONE", "DETAILS", "OFFER", "PUBLIC",
+    "FRESH", "ISSUE", "TYPE", "TOTAL", "WEBSITE", "REGISTERED", "OFFICE", "CORPORATE",
+    "CONTACT", "PERSON", "LISTING", "RISKS", "FINANCE", "STATEMENT", "BOARD", "AUDITORS",
+    "ISSUER", "EQUITY", "SHARES", "GENERAL", "PARTICULARS", "TERMS", "DESCRIPTION",
+    "SUMMARY", "RISK", "TABLE", "PAGE", "CLAUSE", "NUMBER", "AMOUNT", "PRICE", "PERCENTAGE",
+    "BID", "PERIOD", "OBJECTS", "PROMOTERS", "INFORMATION", "SHARE", "NAME", "DATE", "IP",
+    "SSN", "DOB", "CIN", "DIN", "PAN", "LEI", "ISIN", "GST", "GIFT", "SEBI", "RBI", "MCA",
+    "BSE", "NSE", "CDSL", "NSDL", "STT", "ITR", "TDS", "FII", "DII", "NRI", "QIB", "NIB",
+    "RIB", "EMPLOYEE", "RESERVATION", "PORTION", "NET", "FRESH ISSUE", "OFFER FOR SALE",
+    "TOTAL OFFER", "PRE-ISSUE", "POST-ISSUE", "FACE VALUE", "TICK SIZE", "SOCIAL SECURITY NUMBER",
+    "CREDIT CARD NUMBER", "GATEWAY IP ADDRESS", "PERMANENT ACCOUNT NUMBER", "DETAILS OF THE OFFER TO PUBLIC",
+    "RED HERRING PROSPECTUS", "REGISTRAR", "BOARD OF DIRECTORS", "SERVER IP ADDRESS", "BANKERS", "CFO",
+    "KEY MANAGERIAL PERSONNEL"
+}
+
+
+def is_valid_company_entity(entity_str: str, score: float = 1.0) -> bool:
+    """
+    Strictly validates company entity matches to suppress false positives on ordinary English words,
+    table header labels, and non-company text.
+    """
+    s_clean = entity_str.strip().strip(".,:;'\"()")
+    s_upper = s_clean.upper()
+
+    if not s_clean or s_upper in HEADER_NON_COMPANY_WORDS:
+        return False
+
+    words = s_clean.split()
+    if len(words) == 1 and not COMPANY_SUFFIX_REGEX.search(s_clean):
+        if any(c.strip().upper() == s_upper for c in PROSPECTUS_COMPANIES):
+            return True
+        return False
+
+    for c in PROSPECTUS_COMPANIES:
+        c_up = c.strip().upper()
+        if c_up == s_upper or c_up in s_upper or s_upper in c_up:
+            return True
+
+    if COMPANY_SUFFIX_REGEX.search(s_clean):
+        return True
+
+    return False
+
+
 def filter_and_resolve_overlaps(results, text):
     """
     Filters out noise/labels and resolves overlapping entity spans,
@@ -103,7 +171,13 @@ def filter_and_resolve_overlaps(results, text):
                 )
 
         original = text[res.start:res.end].strip()
-        if original in IGNORE_WORDS:
+
+        # Filter out invalid COMPANY / ORGANIZATION false positives
+        if res.entity_type in ("COMPANY", "ORGANIZATION"):
+            if not is_valid_company_entity(original, res.score):
+                continue
+
+        if original in IGNORE_WORDS or original.upper() in HEADER_NON_COMPANY_WORDS:
             continue
         if len(original) < 2:
             continue

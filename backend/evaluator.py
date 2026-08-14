@@ -65,7 +65,7 @@ def check_residual_leakage(redacted_docx_path: str, ground_truth_path: str) -> d
     }
 
 
-def evaluate_redaction(docx_path: str, ground_truth_path: str) -> dict:
+def evaluate_redaction(docx_path: str, ground_truth_path: str, model_name: str = None) -> dict:
     """
     Compares redactor detections against ground truth labels
     and computes precision, recall, f1, and accuracy per entity type,
@@ -74,7 +74,9 @@ def evaluate_redaction(docx_path: str, ground_truth_path: str) -> dict:
     gt_data = load_ground_truth(ground_truth_path)
     doc_text = extract_docx_text(docx_path)
 
-    raw_results = analyzer.analyze(
+    active_analyzer = create_analyzer_engine(model_name) if model_name else analyzer
+
+    raw_results = active_analyzer.analyze(
         text=doc_text,
         language="en",
         entities=SUPPORTED_ENTITIES

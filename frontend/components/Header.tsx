@@ -14,7 +14,7 @@ export function Header() {
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm font-bold tracking-tight text-slate-900">
-              Aegis Redact
+              Privora
             </span>
             <span className="text-xs text-slate-300">|</span>
             <span className="text-xs text-slate-500 font-medium">

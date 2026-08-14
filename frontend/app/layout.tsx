@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Aegis Redact | Enterprise PII Redaction Platform",
+  title: "Privora | Enterprise PII Redaction Platform",
   description: "Automated PII Detection and Realistic Synthetic Redaction Engine for Compliance and Security",
 };
 
