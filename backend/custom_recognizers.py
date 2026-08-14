@@ -182,7 +182,7 @@ def get_custom_recognizers():
             comp_parts.append(r"\b" + esc + r"(?!\w)")
     comp_regex_exact = "|".join(comp_parts)
 
-    generic_comp_regex = r"\b[A-Z][A-Za-z0-9&\s.,-]+(?:\s+Private\s+Limited|\s+Pvt\.?\s*Ltd\.?|\s+Limited|\s+Ltd\.?|,\s*LLP|\s+LLP|\s+Inc\.?|\s+Corporation|\s+Corp\.?|\s+Public\s+Limited\s+Company|\s+PLC)\b"
+    generic_comp_regex = r"\b(?:[A-Z0-9][A-Za-z0-9&.\-]*\s+){1,5}(?:Private\s+Limited|Pvt\.?\s*Ltd\.?|Limited|Ltd\.?|LLP|Inc\.?|Corporation|Corp\.?|Public\s+Limited\s+Company|PLC)\b"
     company_patterns = [
         Pattern(name="exact_prospectus_companies", regex=comp_regex_exact, score=0.98),
         Pattern(name="generic_company_suffix", regex=generic_comp_regex, score=0.85)

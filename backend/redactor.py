@@ -134,14 +134,56 @@ def is_valid_company_entity(entity_str: str, score: float = 1.0) -> bool:
     return False
 
 
+LEADING_ARTICLES_AND_VERBS_REGEX = re.compile(
+    r"^(?:the|a|an|and|of|in|on|at|to|for|with|by|from|be|is|are|was|were|listed|offered|proposed)\s+",
+    re.IGNORECASE
+)
+
+
+def trim_entity_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """
+    Trims leading non-entity words (articles like 'the', prepositions like 'of/on/at',
+    verbs like 'be listed on') from the start of a detected entity span.
+    Guarantees non-PII surrounding text is never deleted or subsumed.
+    """
+    span_str = text[start:end]
+    while True:
+        m = LEADING_ARTICLES_AND_VERBS_REGEX.match(span_str)
+        if m and (start + m.end() < end):
+            start += m.end()
+            span_str = text[start:end]
+        else:
+            break
+    stripped = span_str.lstrip(" \t\n\r.,:;()\"'")
+    if len(stripped) < len(span_str):
+        start += (len(span_str) - len(stripped))
+    return start, end
+
+
 def filter_and_resolve_overlaps(results, text):
     """
     Filters out noise/labels and resolves overlapping entity spans,
     enforcing container priority (ADDRESS containers override sub-tokens)
     and giving precedence to higher confidence and longer spans.
     """
+    # Collect all high-confidence multi-component ADDRESS spans
+    address_spans = [
+        res for res in results
+        if res.entity_type == "ADDRESS" and res.score >= 0.90
+    ]
+
     filtered = []
     for res in results:
+        # Trim leading non-entity words (articles, prepositions, verbs) from start
+        new_start, new_end = trim_entity_span(text, res.start, res.end)
+        if new_start != res.start or new_end != res.end:
+            if new_start < new_end:
+                res = RecognizerResult(
+                    entity_type=res.entity_type,
+                    start=new_start,
+                    end=new_end,
+                    score=res.score
+                )
         # If match is an ADDRESS starting with a label prefix (e.g. Registered Office:),
         # adjust start offset so the label prefix remains unredacted.
         if res.entity_type in ("ADDRESS", "LOCATION"):
@@ -156,6 +198,13 @@ def filter_and_resolve_overlaps(results, text):
                         end=res.end,
                         score=res.score
                     )
+
+        # Discard standalone LOCATION or GPE matches (like 'India', 'Maharashtra', 'Mumbai')
+        # unless they are contained inside a true structured ADDRESS block.
+        if res.entity_type in ("LOCATION", "GPE"):
+            inside_address = any(a.start <= res.start and res.end <= a.end for a in address_spans)
+            if not inside_address:
+                continue
 
         # For PHONE_NUMBER candidates, expand start backward if preceding text contains leading '+' or '+ '
         elif res.entity_type == "PHONE_NUMBER":

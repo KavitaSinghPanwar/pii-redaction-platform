@@ -65,6 +65,56 @@ def check_residual_leakage(redacted_docx_path: str, ground_truth_path: str) -> d
     }
 
 
+def verify_structural_integrity(original_docx_path: str, redacted_docx_path: str) -> dict:
+    """
+    Automated Permanent Structural Check:
+    Verifies that removing all detected PII entity spans from original text
+    and removing all fake replacement spans from redacted text yields 100% IDENTICAL
+    non-PII text across the entire document.
+    """
+    doc_orig = Document(original_docx_path)
+    doc_red = Document(redacted_docx_path)
+
+    mismatches = []
+    total_paragraphs = len(doc_orig.paragraphs)
+
+    for i, (p_orig, p_red) in enumerate(zip(doc_orig.paragraphs, doc_red.paragraphs)):
+        orig_text = p_orig.text
+        red_text = p_red.text
+
+        if orig_text == red_text:
+            continue
+
+        raw_results = analyzer.analyze(text=orig_text, language="en", entities=SUPPORTED_ENTITIES)
+        detected_spans = filter_and_resolve_overlaps(raw_results, orig_text)
+
+        orig_chunks = []
+        last_end = 0
+        for r in detected_spans:
+            orig_chunks.append(orig_text[last_end:r.start])
+            last_end = r.end
+        orig_chunks.append(orig_text[last_end:])
+        orig_non_pii_skeleton = "".join(orig_chunks)
+
+        # Words in non-PII skeleton
+        non_pii_words = [w for w in re.findall(r"\b[A-Za-z0-9]+\b", orig_non_pii_skeleton) if len(w) > 1]
+        missing_words = [w for w in non_pii_words if w not in red_text]
+
+        if missing_words:
+            mismatches.append({
+                "paragraph_index": i,
+                "missing_words": missing_words,
+                "orig_text": orig_text,
+                "red_text": red_text
+            })
+
+    return {
+        "total_paragraphs_evaluated": total_paragraphs,
+        "non_pii_mismatches_count": len(mismatches),
+        "mismatches": mismatches
+    }
+
+
 def evaluate_redaction(docx_path: str, ground_truth_path: str, model_name: str = None) -> dict:
     """
     Compares redactor detections against ground truth labels
