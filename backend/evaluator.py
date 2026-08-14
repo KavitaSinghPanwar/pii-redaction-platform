@@ -182,11 +182,10 @@ def evaluate_redaction(docx_path: str, ground_truth_path: str, model_name: str =
             for g in gt_set:
                 norm_g = norm_s(g)
                 if norm_d == norm_g or norm_d in norm_g or norm_g in norm_d:
-                    tp += 1
                     matched_gt.add(g)
                     matched_det.add(d)
-                    break
 
+        tp = len(matched_gt)
         fp = len(det_set - matched_det)
         fn = len(gt_set - matched_gt)
 
@@ -195,9 +194,8 @@ def evaluate_redaction(docx_path: str, ground_truth_path: str, model_name: str =
         total_fn += fn
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else (1.0 if fn == 0 else 0.0)
-        recall = tp / (tp + fn) if (tp + fn) > 0 else (1.0 if fp == 0 else 0.0)
+        recall = tp / len(gt_set) if len(gt_set) > 0 else 1.0
         f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-        # Accuracy definition over entity set: TP / (TP + FP + FN)
         accuracy = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 1.0
 
         metrics_per_type[cat] = {

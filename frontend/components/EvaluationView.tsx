@@ -19,8 +19,9 @@ export function EvaluationView() {
   const fetchEvaluation = async () => {
     setLoading(true);
     setError(null);
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
     try {
-      const res = await fetch("http://localhost:8000/evaluate");
+      const res = await fetch(`${apiBase}/evaluate`);
       if (!res.ok) {
         throw new Error(`Evaluation failed with status ${res.status}`);
       }

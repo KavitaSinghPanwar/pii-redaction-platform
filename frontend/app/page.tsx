@@ -10,6 +10,8 @@ import { EvaluationView } from "@/components/EvaluationView";
 
 type ViewState = "idle" | "processing" | "results" | "error";
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+
 export default function Home() {
   const [state, setState] = useState<ViewState>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/redact-full", {
+      const res = await fetch(`${API_BASE_URL}/redact-full`, {
         method: "POST",
         body: formData,
       });
@@ -48,7 +50,7 @@ export default function Home() {
       setState("results");
     } catch (err: any) {
       setErrorMsg(
-        err.message || "Failed to communicate with backend server. Ensure backend is running on http://localhost:8000."
+        err.message || `Failed to communicate with backend server. Ensure backend is accessible at ${API_BASE_URL}.`
       );
       setState("error");
     }
@@ -56,7 +58,7 @@ export default function Home() {
 
   const handleDownload = () => {
     if (!analysisResult) return;
-    const downloadUrl = `http://localhost:8000/download/${analysisResult.output_filename}`;
+    const downloadUrl = `${API_BASE_URL}/download/${analysisResult.output_filename}`;
     const a = document.createElement("a");
     a.href = downloadUrl;
     a.download = analysisResult.output_filename;
